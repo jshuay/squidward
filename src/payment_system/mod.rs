@@ -1,6 +1,5 @@
 mod account;
 mod database;
-mod deposit;
 mod error;
 mod transaction;
 mod types;

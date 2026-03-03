@@ -8,10 +8,13 @@ use crate::payment_system::types::TransactionId;
 pub struct Transaction {
     #[serde(rename = "tx")]
     id: TransactionId,
+
     #[serde(rename = "type")]
     action: TransactionAction,
+
     #[serde(rename = "client")]
     client_id: ClientId,
+
     amount: Option<Amount>,
 }
 
