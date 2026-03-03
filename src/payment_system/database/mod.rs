@@ -1,20 +1,18 @@
-use crate::payment_system::types::Amount;
-use crate::payment_system::types::ClientId;
-use crate::payment_system::types::TransactionId;
+mod btree_map;
+mod hash_map;
 
-pub trait AccountDatabase {
-    fn deposit(&mut self, client_id: &ClientId, amount: &Amount) -> Result<(), DatabaseError>;
-    fn withdrawal(&mut self, client_id: &ClientId, amount: &Amount) -> Result<(), DatabaseError>;
-    fn hold_funds(&mut self, client_id: &ClientId, amount: &Amount) -> Result<(), DatabaseError>;
-    fn lock_account(&mut self, client_id: &ClientId) -> Result<(), DatabaseError>;
-}
+pub use btree_map::BTreeAccountDatabase;
+pub use hash_map::HashMapAccountDatabase;
 
-pub trait DepositDatabase {
-    fn insert(
-        &mut self, client_id: &ClientId, transaction_id: &TransactionId, amount: &Amount,
-    ) -> Result<(), DatabaseError>;
+pub trait Database {
+    type Key;
+    type Record;
 
-    fn retrieve(&self, client_id: &ClientId, transaction_id: &TransactionId) -> Result<Option<Amount>, DatabaseError>;
+    /// Inserts a new record into the database. Replaces any existing records.
+    fn insert(&mut self, key: Self::Key, record: Self::Record) -> Result<(), DatabaseError>;
+
+    /// Retrieves a record from the database if it exists.
+    fn retrieve(&self, key: &Self::Key) -> Result<Option<&Self::Record>, DatabaseError>;
 }
 
 pub enum DatabaseError {}
