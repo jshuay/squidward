@@ -1,4 +1,7 @@
+mod payment_system;
+
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use clap::Parser;
 use log::LevelFilter;
@@ -14,7 +17,7 @@ struct Args {
     debug: bool,
 }
 
-fn main() {
+fn main() -> ExitCode {
     let args = Args::parse();
 
     let mut log_level = LevelFilter::Off;
@@ -25,4 +28,10 @@ fn main() {
 
     debug!("Debug logs enabled");
     debug!("Arguments: {:?}", args);
+
+    if let Err(error) = payment_system::simulate(&args.transactions_file) {
+        eprintln!("{error}");
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
 }
