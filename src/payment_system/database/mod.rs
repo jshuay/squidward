@@ -1,11 +1,9 @@
 mod btree_map;
-mod hash_map;
 
 use std::error::Error;
 use std::fmt::Display;
 
-pub use btree_map::BTreeDatabase;
-pub use hash_map::HashMapDatabase;
+pub use btree_map::BTreeMapDatabase;
 
 pub trait Database {
     type Key;

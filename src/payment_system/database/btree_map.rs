@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use crate::payment_system::database::Database;
 use crate::payment_system::database::DatabaseError;
 
-pub type BTreeDatabase<K, R> = BTreeMap<K, R>;
+pub type BTreeMapDatabase<K, R> = BTreeMap<K, R>;
 
-impl<K, R> Database for BTreeDatabase<K, R>
+impl<K, R> Database for BTreeMapDatabase<K, R>
 where
     K: Ord,
     R: Clone,
