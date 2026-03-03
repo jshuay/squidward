@@ -4,13 +4,13 @@ use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
 use crate::payment_system::types::TransactionId;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
     #[serde(rename = "tx")]
     id: TransactionId,
 
     #[serde(rename = "type")]
-    action: TransactionAction,
+    transaction_type: TransactionType,
 
     #[serde(rename = "client")]
     client_id: ClientId,
@@ -22,8 +22,8 @@ impl Transaction {
     pub fn id(&self) -> &TransactionId {
         &self.id
     }
-    pub fn action(&self) -> &TransactionAction {
-        &self.action
+    pub fn transaction_type(&self) -> &TransactionType {
+        &self.transaction_type
     }
     pub fn client_id(&self) -> &ClientId {
         &self.client_id
@@ -33,9 +33,9 @@ impl Transaction {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub enum TransactionAction {
+pub enum TransactionType {
     Deposit,
     Withdrawal,
     Dispute,
