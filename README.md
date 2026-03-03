@@ -66,9 +66,28 @@ assert_eq!(Decimal::MAX, dec!(79_228_162_514_264_337_593_543_950_335));
 If there are multiple transactions with the same transaction id, then only the first transaction is applied. All
 subsequent transactions with the same id will be seen as errors. Example:
 
-```
+```csv
 type,client,tx,amount
 deposit,1,1,1.0        <-- tx: 1, Applied
 deposit,1,1,2.0        <-- tx: 1, Error (ignored)
 withdrawal,1,1,5.0     <-- tx: 1, Error (ignored)
 ```
+
+## Assumption 8
+
+A client should not be recorded to the database if the first transaction is not a `DEPOSIT`. For instance:
+
+```csv
+type,client,tx,amount
+withdrawal,1,1,1.0
+```
+
+Should result in:
+
+```csv
+client,available,held,total,locked
+```
+
+This behavior could be argued either way (to record or not to record). I chose not to record because it could protect
+the database against malicious actors who intentionally send bogus transactions. Plus, a client being absent from the
+database implies that its record would be `<client_id>,0,0,0,false`.
