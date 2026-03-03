@@ -11,8 +11,7 @@ use log::debug;
 use log::error;
 
 use crate::payment_system::account::Account;
-use crate::payment_system::database::BTreeAccountDatabase;
-use crate::payment_system::database::BTreeTransactionDatabase;
+use crate::payment_system::database::BTreeDatabase;
 use crate::payment_system::database::Database;
 use crate::payment_system::error::PaymentSystemError;
 use crate::payment_system::transaction::Transaction;
@@ -36,8 +35,8 @@ pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
     }
     let mut transactions_csv = transactions_csv.unwrap();
 
-    let mut account_database = BTreeAccountDatabase::new();
-    let mut transaction_database = BTreeTransactionDatabase::new();
+    let mut account_database = BTreeDatabase::new();
+    let mut transaction_database = BTreeDatabase::new();
 
     debug!("Iterating through each transaction");
 

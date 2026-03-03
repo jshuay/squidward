@@ -1,33 +1,17 @@
 use std::collections::BTreeMap;
 
-use crate::payment_system::account::Account;
 use crate::payment_system::database::Database;
 use crate::payment_system::database::DatabaseError;
-use crate::payment_system::transaction::Transaction;
-use crate::payment_system::types::ClientId;
-use crate::payment_system::types::TransactionId;
 
-pub type BTreeAccountDatabase = BTreeMap<ClientId, Account>;
+pub type BTreeDatabase<K, R> = BTreeMap<K, R>;
 
-pub type BTreeTransactionDatabase = BTreeMap<TransactionId, Transaction>;
-
-impl Database for BTreeAccountDatabase {
-    type Key = ClientId;
-    type Record = Account;
-
-    fn insert(&mut self, key: Self::Key, record: Self::Record) -> Result<(), DatabaseError> {
-        BTreeMap::insert(self, key, record);
-        Ok(())
-    }
-
-    fn retrieve(&self, key: &Self::Key) -> Result<Option<Self::Record>, DatabaseError> {
-        Ok(self.get(key).map(|record| record.clone()))
-    }
-}
-
-impl Database for BTreeTransactionDatabase {
-    type Key = TransactionId;
-    type Record = Transaction;
+impl<K, R> Database for BTreeDatabase<K, R>
+where
+    K: Ord,
+    R: Clone,
+{
+    type Key = K;
+    type Record = R;
 
     fn insert(&mut self, key: Self::Key, record: Self::Record) -> Result<(), DatabaseError> {
         BTreeMap::insert(self, key, record);
@@ -36,5 +20,10 @@ impl Database for BTreeTransactionDatabase {
 
     fn retrieve(&self, key: &Self::Key) -> Result<Option<Self::Record>, DatabaseError> {
         Ok(self.get(key).map(|record| record.clone()))
+    }
+
+    fn delete(&mut self, key: Self::Key) -> Result<(), DatabaseError> {
+        self.remove(&key);
+        Ok(())
     }
 }

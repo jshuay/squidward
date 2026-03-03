@@ -4,10 +4,8 @@ mod hash_map;
 use std::error::Error;
 use std::fmt::Display;
 
-pub use btree_map::BTreeAccountDatabase;
-pub use btree_map::BTreeTransactionDatabase;
-pub use hash_map::HashMapAccountDatabase;
-pub use hash_map::HashMapTransactionDatabase;
+pub use btree_map::BTreeDatabase;
+pub use hash_map::HashMapDatabase;
 
 pub trait Database {
     type Key;
@@ -18,6 +16,8 @@ pub trait Database {
 
     /// Retrieves a record from the database if it exists.
     fn retrieve(&self, key: &Self::Key) -> Result<Option<Self::Record>, DatabaseError>;
+
+    fn delete(&mut self, key: Self::Key) -> Result<(), DatabaseError>;
 }
 
 #[derive(Debug)]
