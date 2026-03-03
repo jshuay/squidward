@@ -1,15 +1,18 @@
-use rust_decimal::Decimal;
 use serde::Deserialize;
+
+use crate::payment_system::types::Amount;
+use crate::payment_system::types::ClientId;
+use crate::payment_system::types::TransactionId;
 
 #[derive(Deserialize, Debug)]
 pub struct Transaction {
     #[serde(rename = "tx")]
-    id: u32,
+    id: TransactionId,
     #[serde(rename = "type")]
     action: TransactionAction,
     #[serde(rename = "client")]
-    client_id: u16,
-    amount: Option<Decimal>,
+    client_id: ClientId,
+    amount: Option<Amount>,
 }
 
 impl Transaction {
@@ -22,7 +25,7 @@ impl Transaction {
     pub fn client_id(&self) -> &u16 {
         &self.client_id
     }
-    pub fn amount(&self) -> Option<&Decimal> {
+    pub fn amount(&self) -> Option<&Amount> {
         self.amount.as_ref()
     }
 }

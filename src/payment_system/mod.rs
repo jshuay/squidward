@@ -1,5 +1,7 @@
+mod database;
 mod error;
 mod transaction;
+mod types;
 
 use std::path::PathBuf;
 
@@ -7,10 +9,8 @@ use csv::Trim;
 use log::debug;
 use log::error;
 
-use crate::payment_system::error::PaymentSystemError;
 use crate::payment_system::transaction::Transaction;
-
-pub type Result<T> = std::result::Result<T, PaymentSystemError>;
+use crate::payment_system::types::Result;
 
 pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
     debug!("Running payment system simulator");

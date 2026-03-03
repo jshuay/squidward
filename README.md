@@ -60,3 +60,15 @@ From the [documentation](https://docs.rs/rust_decimal/latest/rust_decimal/struct
 assert_eq!(Decimal::MIN, dec!(-79_228_162_514_264_337_593_543_950_335));
 assert_eq!(Decimal::MAX, dec!(79_228_162_514_264_337_593_543_950_335));
 ```
+
+## Assumption 7
+
+If there are multiple transactions with the same transaction id, then only the first transaction is applied. All
+subsequent transactions with the same id will be seen as errors. Example:
+
+```
+type,client,tx,amount
+deposit,1,1,1.0        <-- tx: 1, Applied
+deposit,1,1,2.0        <-- tx: 1, Error (ignored)
+withdrawal,1,1,5.0     <-- tx: 1, Error (ignored)
+```
