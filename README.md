@@ -50,3 +50,13 @@ available funds to issue the chargeback).
 
 For this implementation, I will again defer to the functionality described (or in this case, omitted) in the specifications and
 assume that locked accounts can never become unlocked. New transactions on the account will be ignored.
+
+## Assumption 6
+
+Each individual `amount` value and the accumulated `amount` value for each client will fit inside a `rust_decimal::Decimal`.
+From the [documentation](https://docs.rs/rust_decimal/latest/rust_decimal/struct.Decimal.html#impl-Decimal):
+
+```rust
+assert_eq!(Decimal::MIN, dec!(-79_228_162_514_264_337_593_543_950_335));
+assert_eq!(Decimal::MAX, dec!(79_228_162_514_264_337_593_543_950_335));
+```
