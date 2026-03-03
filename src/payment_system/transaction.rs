@@ -16,13 +16,13 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn id(&self) -> &u32 {
+    pub fn id(&self) -> &TransactionId {
         &self.id
     }
     pub fn action(&self) -> &TransactionAction {
         &self.action
     }
-    pub fn client_id(&self) -> &u16 {
+    pub fn client_id(&self) -> &ClientId {
         &self.client_id
     }
     pub fn amount(&self) -> Option<&Amount> {

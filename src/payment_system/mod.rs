@@ -11,8 +11,10 @@ use csv::Trim;
 use log::debug;
 use log::error;
 
+use crate::payment_system::error::PaymentSystemError;
 use crate::payment_system::transaction::Transaction;
-use crate::payment_system::types::Result;
+
+pub type Result<T> = std::result::Result<T, PaymentSystemError>;
 
 pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
     debug!("Running payment system simulator");
