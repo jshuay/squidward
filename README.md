@@ -24,10 +24,10 @@ Do note that `DEPOSIT` as the first valid transaction is implicitly enforced, no
 
 ## Assumption 2
 A `RESOLVE` or `CHARGEBACK` transaction cannot occur before a `DISPUTE` transaction. That `DISPUTE` transaction must have a
-matching target transaction, otherwise the `RESOLVE` or `CHARAGEBACK` transaction will be ignored.
+matching "disputed" transaction, otherwise the `RESOLVE` or `CHARAGEBACK` transaction will be ignored.
 
 ## Assumption 3
-A `DISPUTE` transaction must have a target transaction of type `DEPOSIT`. I believe this is implicitly implied in the
+A `DISPUTE` transaction must have a "disputed" transaction of type `DEPOSIT`. I believe this is implicitly implied in the
 specifications ("... available funds should *decrease* by the amount disputed...").
 
 There could be an argument to allow disputing withdrawals for cases where the account is compromised and the account

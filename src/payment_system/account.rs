@@ -1,7 +1,7 @@
 use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Account {
     client_id: ClientId,
     available: Amount,

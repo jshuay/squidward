@@ -52,6 +52,9 @@ pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
         process_transaction(&mut account_database, &mut transaction_database, transaction.unwrap())?;
     }
 
+    println!("Account database: {:?}", account_database);
+    println!("Transaction database: {:?}", transaction_database);
+
     debug!("Payment system simulation completed");
 
     Ok(())
@@ -134,6 +137,42 @@ where
     account_database.insert(account.client_id().clone(), account)?;
 
     debug!("Withdrawal successful");
+
+    Ok(())
+}
+
+fn dispute<A, T>(
+    account_database: &mut A, transaction_database: &T, mut account: Account, disputed_transaction_id: &TransactionId,
+) -> Result<()>
+where
+    A: Database<Key = ClientId, Record = Account>,
+    T: Database<Key = TransactionId, Record = Transaction>,
+{
+    debug!("Processing dispute transaction");
+
+    let Some(disputed_transaction) = transaction_database.retrieve(disputed_transaction_id)? else {
+        error!("The disputed transaction does not exist");
+        return Ok(());
+    };
+
+    if disputed_transaction.transaction_type() != &TransactionType::Deposit {
+        error!("Can only dispute deposit transactions");
+        return Ok(());
+    }
+
+    if disputed_transaction.amount().is_none() {
+        error!("Disupted transaction did not have an Amount");
+        return Ok(());
+    }
+
+    let disputed_amount = disputed_transaction.amount().unwrap();
+
+    *account.available_funds_mut() -= disputed_amount;
+    *account.held_funds_mut() += disputed_amount;
+
+    account_database.insert(account.client_id().clone(), account)?;
+
+    debug!("Dispute successful");
 
     Ok(())
 }
