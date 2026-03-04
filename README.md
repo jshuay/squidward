@@ -75,7 +75,7 @@ withdrawal,1,1,5.0     <-- tx: 1, Error (ignored)
 
 ## Assumption 8
 
-A client should not be recorded to the database if the first transaction is not a `DEPOSIT`. For instance:
+A new client should not be recorded to the database if the first transaction is not a `DEPOSIT`. For instance:
 
 ```csv
 type,client,tx,amount

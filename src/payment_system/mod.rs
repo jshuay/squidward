@@ -35,8 +35,8 @@ pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
     }
     let mut transactions_csv = transactions_csv.unwrap();
 
-    let mut account_database = BTreeMapDatabase::new();
-    let mut transaction_database = BTreeMapDatabase::new();
+    let mut account_database: BTreeMapDatabase<ClientId, Account> = BTreeMapDatabase::new();
+    let mut transaction_database: BTreeMapDatabase<TransactionId, Transaction> = BTreeMapDatabase::new();
 
     debug!("Iterating through each transaction");
 
@@ -47,12 +47,13 @@ pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
             error!("Transaction deserialize error: {}", error);
             continue;
         }
+        let transaction = transaction.unwrap();
 
-        process_transaction(&mut account_database, &mut transaction_database, transaction.unwrap())?;
+        process_transaction(&mut account_database, &mut transaction_database, transaction)?;
     }
 
-    println!("Account database: {:?}", account_database);
-    println!("Transaction database: {:?}", transaction_database);
+    debug!("Account database: {:#?}", account_database);
+    debug!("Transaction database: {:#?}", transaction_database);
 
     debug!("Payment system simulation completed");
 
@@ -60,18 +61,13 @@ pub fn simulate(transactions_file: &PathBuf) -> Result<()> {
 }
 
 fn process_transaction<A, T>(
-    account_database: &mut A, transaction_database: &mut T, transaction: Transaction,
+    account_database: &mut A, transaction_database: &mut T, mut transaction: Transaction,
 ) -> Result<()>
 where
     A: Database<Key = ClientId, Record = Account>,
     T: Database<Key = TransactionId, Record = Transaction>,
 {
     debug!("Processing transaction {}", transaction.id());
-
-    if transaction_database.retrieve(transaction.id())?.is_some() {
-        error!("Transaction {} has already been processed", transaction.id());
-        return Ok(());
-    }
 
     debug!("Retrieving account info for client");
 
@@ -81,50 +77,65 @@ where
     });
 
     match transaction.transaction_type() {
-        &TransactionType::Deposit => deposit(account_database, account, transaction.amount())?,
-        &TransactionType::Withdrawal => withdraw(account_database, account, transaction.amount())?,
-        &TransactionType::Dispute => todo!(),
+        &TransactionType::Deposit => deposit(account_database, transaction_database, account, transaction)?,
+        &TransactionType::Withdrawal => withdraw(account_database, transaction_database, account, transaction)?,
+        &TransactionType::Dispute => dispute(account_database, transaction_database, account, transaction)?,
         &TransactionType::Resolve => todo!(),
         &TransactionType::Chargeback => todo!(),
     }
 
-    transaction_database.insert(transaction.id().clone(), transaction)?;
-
     Ok(())
 }
 
-fn deposit<A>(account_database: &mut A, mut account: Account, amount: Option<&Amount>) -> Result<()>
+fn deposit<A, T>(
+    account_database: &mut A, transaction_database: &mut T, mut account: Account, mut transaction: Transaction,
+) -> Result<()>
 where
     A: Database<Key = ClientId, Record = Account>,
+    T: Database<Key = TransactionId, Record = Transaction>,
 {
     debug!("Processing deposit transaction");
 
-    if amount.is_none() {
+    if transaction.amount().is_none() {
         error!("Transaction did not have an Amount specified");
         return Ok(());
     }
 
-    *account.available_funds_mut() += amount.unwrap();
+    if transaction_database.retrieve(transaction.id())?.is_some() {
+        error!("Transaction {} has already been processed", transaction.id());
+        return Ok(());
+    }
+
+    *account.available_funds_mut() += transaction.amount().unwrap();
 
     account_database.insert(account.client_id().clone(), account)?;
+    transaction_database.insert(transaction.id().clone(), transaction)?;
 
     debug!("Deposit successful");
 
     Ok(())
 }
 
-fn withdraw<A>(account_database: &mut A, mut account: Account, amount: Option<&Amount>) -> Result<()>
+fn withdraw<A, T>(
+    account_database: &mut A, transaction_database: &mut T, mut account: Account, mut transaction: Transaction,
+) -> Result<()>
 where
     A: Database<Key = ClientId, Record = Account>,
+    T: Database<Key = TransactionId, Record = Transaction>,
 {
     debug!("Processing withdraw transaction");
 
-    if amount.is_none() {
+    if transaction.amount().is_none() {
         error!("Transaction did not have an Amount specified");
         return Ok(());
     }
 
-    let tentative_amount = account.available_funds() - amount.unwrap();
+    if transaction_database.retrieve(transaction.id())?.is_some() {
+        error!("Transaction {} has already been processed", transaction.id());
+        return Ok(());
+    }
+
+    let tentative_amount = account.available_funds() - transaction.amount().unwrap();
 
     if tentative_amount < Amount::ZERO {
         error!("Client does not have sufficient funds to withdraw");
@@ -134,6 +145,7 @@ where
     *account.available_funds_mut() = tentative_amount;
 
     account_database.insert(account.client_id().clone(), account)?;
+    transaction_database.insert(transaction.id().clone(), transaction)?;
 
     debug!("Withdrawal successful");
 
@@ -141,7 +153,7 @@ where
 }
 
 fn dispute<A, T>(
-    account_database: &mut A, transaction_database: &T, mut account: Account, disputed_transaction_id: &TransactionId,
+    account_database: &mut A, transaction_database: &mut T, mut account: Account, transaction: Transaction,
 ) -> Result<()>
 where
     A: Database<Key = ClientId, Record = Account>,
@@ -149,7 +161,7 @@ where
 {
     debug!("Processing dispute transaction");
 
-    let Some(disputed_transaction) = transaction_database.retrieve(disputed_transaction_id)? else {
+    let Some(mut disputed_transaction) = transaction_database.retrieve(transaction.id())? else {
         error!("The disputed transaction does not exist");
         return Ok(());
     };
@@ -170,6 +182,9 @@ where
     *account.held_funds_mut() += disputed_amount;
 
     account_database.insert(account.client_id().clone(), account)?;
+
+    *disputed_transaction.transaction_type_mut() = TransactionType::Dispute;
+    transaction_database.insert(disputed_transaction.id().clone(), disputed_transaction)?;
 
     debug!("Dispute successful");
 
