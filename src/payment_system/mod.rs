@@ -7,6 +7,7 @@ use csv::Reader;
 use log::debug;
 use log::error;
 
+use crate::payment_system::account::ACCOUNT_HEADERS;
 use crate::payment_system::account::Account;
 use crate::payment_system::account::Accounts;
 use crate::payment_system::transaction::Transaction;
@@ -24,6 +25,7 @@ mod types {
     pub type Amount = Decimal;
 }
 
+/// Main engine for simulating the payment system.
 pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Running payment system simulator");
 
@@ -47,10 +49,7 @@ pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Account database: {:#?}", accounts);
     debug!("Transaction database: {:#?}", transactions);
 
-    println!("client,available,held,total,locked");
-    for account in accounts.values() {
-        println!("{account}");
-    }
+    output_accounts_summary(&accounts);
 
     debug!("Payment system simulation completed");
 }
@@ -238,4 +237,11 @@ fn chargeback(
     transactions.insert(disputed_transaction.id(), disputed_transaction);
 
     debug!("Chargeback successful");
+}
+
+fn output_accounts_summary(accounts: &Accounts) {
+    println!("{ACCOUNT_HEADERS}");
+    for account in accounts.values() {
+        println!("{account}");
+    }
 }

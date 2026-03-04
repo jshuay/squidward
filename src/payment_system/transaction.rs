@@ -8,6 +8,8 @@ use crate::payment_system::types::TransactionId;
 
 pub type Transactions = BTreeMap<TransactionId, Transaction>;
 
+/// Structure for holding the transaction data needed to perform transformations on client
+/// accounts.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
     #[serde(rename = "tx")]

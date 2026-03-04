@@ -6,6 +6,8 @@ use crate::payment_system::types::ClientId;
 
 pub type Accounts = BTreeMap<ClientId, Account>;
 
+pub const ACCOUNT_HEADERS: &str = "client,available,held,total,locked";
+
 const PRECISION: u32 = 4;
 
 /// Structure that represents the latest state of a client's account.
