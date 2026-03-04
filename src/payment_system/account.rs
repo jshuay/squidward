@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
 
 pub type Accounts = BTreeMap<ClientId, Account>;
+
+const PRECISION: u32 = 4;
 
 #[derive(Debug, Clone)]
 pub struct Account {
@@ -11,6 +14,20 @@ pub struct Account {
     available: Amount,
     held: Amount,
     locked: bool,
+}
+
+impl Display for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{},{},{},{},{}",
+            self.client_id,
+            self.available.round_dp(PRECISION),
+            self.held.round_dp(PRECISION),
+            self.total_funds().round_dp(PRECISION),
+            self.locked
+        )
+    }
 }
 
 impl Account {

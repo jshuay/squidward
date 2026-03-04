@@ -38,6 +38,11 @@ pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Account database: {:#?}", accounts);
     debug!("Transaction database: {:#?}", transactions);
 
+    println!("client,available,held,total,locked");
+    for account in accounts.values() {
+        println!("{account}");
+    }
+
     debug!("Payment system simulation completed");
 }
 
