@@ -54,6 +54,38 @@ Lastly, I would have loved to implement Rust's type state pattern via `PhantomDa
 lifecycle. It's one of the reasons why Rust is so cool in that it is able to guarantee state machines are strictly
 followed at compile time. But again, I was advised not to over-engineer this solution so I opted to not do this.
 
+# AI Disclaimer
+
+I used AI in 2 ways:
+
+1. Google Search AI when looking up Rust documentation. Example query: "rust csv ignore whitespace"
+2. ChatGPT to help generate 1 large test data set (10,000 rows). Prompt used:
+
+```
+generate me a transaction.csv file.
+
+The headers: type,client,tx,amount
+
+the valid types are: deposit, withdrawal, dispute, resolve, chargeback
+
+client is of type u16
+
+tx is of type u32
+
+amount is any positive float. can have more than 4 decimal places
+
+dispute, resolve, and chargeback types do not include an amount.
+dispute, resolve, and chargeback types reference any previous row's client and tx as its own.
+valid rows for dispute, resolve, and chargeback should have a trailing comma to indicate no amount.
+
+generate 10,000 rows with random data that fit the criteria above
+
+Can occasionally include invalid rows like ones with extra data or missing data. add less than 500 of these kinds of rows
+```
+
+No other AI was used for this project. All Rust code was handwritten. All project scoping/brainstorming was done by
+yours truely.
+
 # Assumptions
 
 ## Assumption 1
