@@ -12,6 +12,48 @@ Use the `-d` / `--debug` flag to see debug logs:
 cargo run -- transactions.csv --debug
 ```
 
+# Payment System Details
+
+This is a single-threaded payment system solution that processes lists of transactions in CSV format. It uses the `csv`
+crate to read each transaction into memory one at a time, `serde` to transform the bytes data into data structures that
+are used throughout the payment system, and `rust_decimal` to easily ensure 4 decimal precision.
+
+I used the very popular `clap` crate to expose the CLI interface. One could argue that clap is overkill given that there
+is only 1 required argument and that I could have just used `std::env::args()` instead. But I opted to use clap anyways
+for its convenience and potential for extension in the future. For instance, it enabled me to easily add a new optional
+argument for showing debug logs.
+
+Speaking of which, I added debug/error statements throughout the program via `log` and `env_logger`. Although this makes
+the code slightly more bloated, I thought it would be worth keeping in to help catch bugs and verify the program is
+running as I expect it to. This feature is disabled by default as required by the specifications.
+
+In order to process the transactions efficiently, I used 2 in-memory databases (`BTreeMap`s) to dynamically track the
+updates to Client Accounts after applying each transaction. One of the databases is used to remember previous
+transactions so that the payment system can prevent invalid scenarios like duplicate transactions. In a real-world
+payment system, these databases are almost certainly remote ones that require extra machinery to ensure strongly
+consistent reads/writes.
+
+This payment system uses the Transaction's type as a sort of state machine to know what are valid future transactions on
+the same TransactionId. There is essentially 2 simple state machines. The first is just Withdrawal which is completely
+standalone. The second is the Deposit state machine which can flow into dispute-related states
+(Dispute/Resolve/Chargeback).
+
+## Out Of Scope
+
+There were a number of things I wanted to build into this system, namely async, traits + generics, and type-enforced
+state machines. For simplicity and time, I opted to not pursue these endeavors.
+
+Converting this implementation to async is possible but will require non-trivial work to ensure strongly consistent
+access to the databases so that tasks running concurrently don't step on each other.
+
+Regarding traits + generics, I wanted to use them to interface the database API to mimic the dependency injection
+paradigm. I actually did include this in an early draft but scrapped it to help simplify the development process given
+the time constraints.
+
+Lastly, I would have loved to implement Rust's type state pattern via `PhantomData`s to enfore the transaction
+lifecycle. It's one of the reasons why Rust is so cool in that it is able to guarantee state machines are strictly
+followed at compile time. But again, I was advised not to over-engineer this solution so I opted to not do this.
+
 # Assumptions
 
 ## Assumption 1
@@ -119,3 +161,24 @@ statistical properties with using the former strategy, so I am inclined to use i
 6.5 -> 6 (not 7!)
 6.6 -> 7
 ```
+
+## Assumption 12
+
+This implementation requires 2 key/value databases and currently implements them as BTree maps. In a real payment
+system, these databases are almost certainly going to be remote (i.e. not stored on the server). But since that is not
+the case for this implementation, I am going to assume that the input data set is not unreasonably large and/or the
+hardware running this code will have enough memory to hold (worst case) roughly 2x the number of input transactions
+(multiplied by the size of the Account and Transaction records).
+
+The first database stores the Account summary information for each Client, allowing for dynamic updates. Recording this
+information is unavoidable (in this scenario).
+
+The second database stores the Transactions provided by input data set. Remembering which transactions happen is
+important to the functionality of the payment system since it needs to prevent things like applying duplicate
+transactions multiple times. There are a couple things I could implement to reduce the number of records stored:
+
+1. Remove any transactions in stored with type `CHARGEBACK`. Since this is a terminal state, no future transactions with
+   the same TransactionId will need to be applied
+2. Remove all transactions for ClientIds whose accounts are locked. In this implementation, I assume that locked
+   accounts can never become unlocked. Therefore, I could remove all transactions related to locked Clients to save
+   memory space
