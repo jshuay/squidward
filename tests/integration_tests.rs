@@ -137,3 +137,18 @@ fn run_program_with_transactions_after_lock_csv_correctly_ignores_subsequent_tra
 
     assert_eq!(expected, String::from_utf8_lossy(&output.unwrap().stdout));
 }
+
+#[test]
+fn run_program_with_resolve_chargeback_before_dispute_csv_correctly_ignores_resolve_and_chargeback() {
+    let output = Command::new(PROGRAM_PATH)
+        .arg("test_files/resolve_chargeback_before_dispute.csv")
+        .output();
+
+    let expected = format!(
+        "{}\
+            1,0,100,100,false\n",
+        ACCOUNTS_HEADERS
+    );
+
+    assert_eq!(expected, String::from_utf8_lossy(&output.unwrap().stdout));
+}
