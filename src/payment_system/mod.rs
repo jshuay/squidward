@@ -76,6 +76,11 @@ where
         Account::new(transaction.client_id().clone())
     });
 
+    if account.locked() {
+        error!("Account is locked. No further transactions for this account will be processed");
+        return Ok(());
+    }
+
     match transaction.transaction_type() {
         &TransactionType::Deposit => deposit(account_database, transaction_database, account, transaction)?,
         &TransactionType::Withdrawal => withdraw(account_database, transaction_database, account, transaction)?,
