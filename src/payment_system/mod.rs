@@ -80,7 +80,7 @@ where
         &TransactionType::Deposit => deposit(account_database, transaction_database, account, transaction)?,
         &TransactionType::Withdrawal => withdraw(account_database, transaction_database, account, transaction)?,
         &TransactionType::Dispute => dispute(account_database, transaction_database, account, transaction)?,
-        &TransactionType::Resolve => todo!(),
+        &TransactionType::Resolve => resolve(account_database, transaction_database, account, transaction)?,
         &TransactionType::Chargeback => todo!(),
     }
 
@@ -187,6 +187,45 @@ where
     transaction_database.insert(disputed_transaction.id().clone(), disputed_transaction)?;
 
     debug!("Dispute successful");
+
+    Ok(())
+}
+
+fn resolve<A, T>(
+    account_database: &mut A, transaction_database: &mut T, mut account: Account, transaction: Transaction,
+) -> Result<()>
+where
+    A: Database<Key = ClientId, Record = Account>,
+    T: Database<Key = TransactionId, Record = Transaction>,
+{
+    debug!("Processing resolve transaction");
+
+    let Some(mut disputed_transaction) = transaction_database.retrieve(transaction.id())? else {
+        error!("The disputed transaction does not exist");
+        return Ok(());
+    };
+
+    if disputed_transaction.transaction_type() != &TransactionType::Dispute {
+        error!("Can only resolve disputed transactions");
+        return Ok(());
+    }
+
+    if disputed_transaction.amount().is_none() {
+        error!("Disupted transaction did not have an Amount");
+        return Ok(());
+    }
+
+    let disputed_amount = disputed_transaction.amount().unwrap();
+
+    *account.available_funds_mut() += disputed_amount;
+    *account.held_funds_mut() -= disputed_amount;
+
+    account_database.insert(account.client_id().clone(), account)?;
+
+    *disputed_transaction.transaction_type_mut() = TransactionType::Resolve;
+    transaction_database.insert(disputed_transaction.id().clone(), disputed_transaction)?;
+
+    debug!("Resolve successful");
 
     Ok(())
 }
