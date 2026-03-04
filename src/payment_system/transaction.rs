@@ -1,8 +1,12 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
 use crate::payment_system::types::TransactionId;
+
+pub type Transactions = BTreeMap<TransactionId, Transaction>;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
@@ -19,8 +23,8 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn id(&self) -> &TransactionId {
-        &self.id
+    pub fn id(&self) -> TransactionId {
+        self.id
     }
     pub fn transaction_type(&self) -> &TransactionType {
         &self.transaction_type
@@ -28,8 +32,8 @@ impl Transaction {
     pub fn transaction_type_mut(&mut self) -> &mut TransactionType {
         &mut self.transaction_type
     }
-    pub fn client_id(&self) -> &ClientId {
-        &self.client_id
+    pub fn client_id(&self) -> ClientId {
+        self.client_id
     }
     pub fn amount(&self) -> Option<&Amount> {
         self.amount.as_ref()

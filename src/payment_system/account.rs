@@ -1,5 +1,9 @@
+use std::collections::BTreeMap;
+
 use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
+
+pub type Accounts = BTreeMap<ClientId, Account>;
 
 #[derive(Debug, Clone)]
 pub struct Account {
@@ -19,8 +23,8 @@ impl Account {
         }
     }
 
-    pub fn client_id(&self) -> &ClientId {
-        &self.client_id
+    pub fn client_id(&self) -> ClientId {
+        self.client_id
     }
 
     pub fn available_funds(&self) -> &Amount {

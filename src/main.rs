@@ -4,8 +4,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use csv::Trim;
 use log::LevelFilter;
 use log::debug;
+use log::error;
 
 /// Squidward payment system simulator
 #[derive(Parser, Debug)]
@@ -29,9 +31,16 @@ fn main() -> ExitCode {
     debug!("Debug logs enabled");
     debug!("Arguments: {:?}", args);
 
-    if let Err(error) = payment_system::simulate(&args.transactions_file) {
-        eprintln!("{error}");
+    debug!("Reading input transactions CSV file: {:?}", args.transactions_file);
+
+    let transactions_csv = csv::ReaderBuilder::new().trim(Trim::All).from_path(&args.transactions_file);
+
+    if let Err(error) = transactions_csv {
+        error!("Failed to read transactions file: {}", error);
         return ExitCode::FAILURE;
     }
+
+    payment_system::simulate(transactions_csv.unwrap());
+
     ExitCode::SUCCESS
 }
