@@ -55,6 +55,8 @@ impl Account {
         &mut self.available
     }
 
+    // Included for completeness
+    #[allow(unused)]
     pub fn held_funds(&self) -> &Amount {
         &self.held
     }
