@@ -132,7 +132,14 @@ fn is_valid_transaction(transaction: &Transaction, existing_transaction: &Option
                 return false;
             }
             if existing_transaction.amount().is_none() {
-                error!("Transaction did not have an Amount specified");
+                error!("The disputed transaction did not have an Amount specified");
+                return false;
+            }
+            if transaction.amount().is_some() {
+                error!(
+                    "The {:?} transaction incorrectly specified an Amount",
+                    transaction.transaction_type()
+                );
                 return false;
             }
         },
@@ -361,6 +368,30 @@ mod tests {
         let dispute_transaction = Transaction::new(transaction_id, TransactionType::Dispute, client_id, None);
         let resolve_transaction = Transaction::new(transaction_id, TransactionType::Resolve, client_id, None);
         let chargeback_transaction = Transaction::new(transaction_id, TransactionType::Chargeback, client_id, None);
+
+        assert!(!is_valid_transaction(
+            &dispute_transaction,
+            &Some(&existing_transaction)
+        ));
+        assert!(!is_valid_transaction(&resolve_transaction, &Some(&dispute_transaction)));
+        assert!(!is_valid_transaction(
+            &chargeback_transaction,
+            &Some(&dispute_transaction)
+        ));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_dispute_resolve_and_chargeback_with_amount_returns_false() {
+        let transaction_id = 0;
+        let client_id = 0;
+        let amount = dec!(1.0);
+
+        let existing_transaction = Transaction::new(transaction_id, TransactionType::Deposit, client_id, Some(amount));
+
+        let dispute_transaction = Transaction::new(transaction_id, TransactionType::Dispute, client_id, Some(amount));
+        let resolve_transaction = Transaction::new(transaction_id, TransactionType::Resolve, client_id, Some(amount));
+        let chargeback_transaction =
+            Transaction::new(transaction_id, TransactionType::Chargeback, client_id, Some(amount));
 
         assert!(!is_valid_transaction(
             &dispute_transaction,

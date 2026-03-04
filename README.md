@@ -182,3 +182,8 @@ transactions multiple times. There are a couple things I could implement to redu
 2. Remove all transactions for ClientIds whose accounts are locked. In this implementation, I assume that locked
    accounts can never become unlocked. Therefore, I could remove all transactions related to locked Clients to save
    memory space
+
+## Assumption 13
+
+The transaction type provided by the input CSV is all lowercase as shown in the specifications. Correctly spelled types
+that are incorrectly cased will be ignored.
