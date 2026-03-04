@@ -1,6 +1,16 @@
 mod account;
 mod transaction;
 
+mod types {
+    use rust_decimal::Decimal;
+
+    pub type ClientId = u16;
+
+    pub type TransactionId = u32;
+
+    pub type Amount = Decimal;
+}
+
 use std::fs::File;
 
 use csv::Reader;
@@ -12,18 +22,9 @@ use crate::payment_system::account::Account;
 use crate::payment_system::account::Accounts;
 use crate::payment_system::transaction::Transaction;
 use crate::payment_system::transaction::TransactionType;
+use crate::payment_system::transaction::TransactionType::*;
 use crate::payment_system::transaction::Transactions;
 use crate::payment_system::types::Amount;
-
-mod types {
-    use rust_decimal::Decimal;
-
-    pub type ClientId = u16;
-
-    pub type TransactionId = u32;
-
-    pub type Amount = Decimal;
-}
 
 /// Main engine for simulating the payment system.
 pub fn simulate(mut transactions_csv: Reader<File>) {
@@ -35,17 +36,32 @@ pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Iterating through each transaction");
 
     for transaction in transactions_csv.deserialize::<Transaction>() {
+        debug!("==========================================");
         debug!("Transaction: {transaction:?}");
 
         if let Err(error) = transaction {
             error!("Transaction deserialize error: {}", error);
             continue;
         }
-        let transaction = transaction.unwrap();
+        let mut transaction = transaction.unwrap();
 
-        process_transaction(&mut accounts, &mut transactions, transaction);
+        let mut account = accounts.get(&transaction.client_id()).cloned().unwrap_or_else(|| {
+            debug!("Client account does not exist in database");
+            Account::new(transaction.client_id())
+        });
+        debug!("Account: {account:?}");
+
+        let existing_transaction = transactions.get(&transaction.id());
+        debug!("Existing Transaction: {existing_transaction:?}");
+
+        if apply_transaction(&mut account, &mut transaction, existing_transaction) {
+            accounts.insert(account.client_id(), account);
+            transactions.insert(transaction.id(), transaction);
+            debug!("Successfully applied transaction");
+        }
     }
 
+    debug!("==========================================");
     debug!("Account database: {:#?}", accounts);
     debug!("Transaction database: {:#?}", transactions);
 
@@ -54,189 +70,159 @@ pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Payment system simulation completed");
 }
 
-fn process_transaction(accounts: &mut Accounts, transactions: &mut Transactions, transaction: Transaction) {
-    debug!("Processing transaction {}", transaction.id());
-
-    debug!("Retrieving account info for client");
-
-    let account = accounts.get(&transaction.client_id()).cloned().unwrap_or_else(|| {
-        debug!("Client account does not exist in database");
-        Account::new(transaction.client_id())
-    });
+/// Attempts to apply the transaction locally, without comitting to database.
+///
+/// Returns a boolean that indicates if the transaction was applied or not.
+fn apply_transaction(
+    account: &mut Account, transaction: &mut Transaction, existing_transaction: Option<&Transaction>,
+) -> bool {
+    debug!("Attempting to locally apply transaction {}", transaction.id());
 
     if account.locked() {
         error!("Account is locked. No further transactions for this account will be processed");
-        return;
+        return false;
     }
 
+    if !is_valid_transaction(transaction, &existing_transaction) {
+        error!("Received invalid transaction. Ignoring");
+        return false;
+    }
+
+    let transaction_type = transaction.transaction_type();
+
+    if transaction_type == Deposit {
+        return deposit(account, transaction.amount().unwrap());
+    }
+    if transaction_type == Withdrawal {
+        return withdraw(account, transaction.amount().unwrap());
+    }
+
+    let disputed_transaction = existing_transaction.unwrap();
+    let disputed_transaction_type = disputed_transaction.transaction_type();
+    let disputed_amount = disputed_transaction.amount().unwrap();
+
+    match transaction_type {
+        Dispute => dispute(account, transaction, disputed_transaction_type, disputed_amount),
+        Resolve => resolve(account, transaction, disputed_transaction_type, disputed_amount),
+        Chargeback => chargeback(account, transaction, disputed_transaction_type, disputed_amount),
+        _ => unreachable!("Deposit and Withdrawal are handled above"),
+    }
+}
+
+fn is_valid_transaction(transaction: &Transaction, existing_transaction: &Option<&Transaction>) -> bool {
     match transaction.transaction_type() {
-        &TransactionType::Deposit => deposit(accounts, transactions, account, transaction),
-        &TransactionType::Withdrawal => withdraw(accounts, transactions, account, transaction),
-        &TransactionType::Dispute => dispute(accounts, transactions, account, transaction),
-        &TransactionType::Resolve => resolve(accounts, transactions, account, transaction),
-        &TransactionType::Chargeback => chargeback(accounts, transactions, account, transaction),
+        Deposit | Withdrawal => {
+            if existing_transaction.is_some() {
+                error!("Transaction {} has already been processed", transaction.id());
+                return false;
+            }
+            if transaction.amount().is_none() {
+                error!("Transaction did not have an Amount specified");
+                return false;
+            }
+        },
+        Dispute | Resolve | Chargeback => {
+            if existing_transaction.is_none() {
+                error!("The disputed transaction does not exist");
+                return false;
+            }
+
+            let existing_transaction = existing_transaction.unwrap();
+
+            if existing_transaction.client_id() != transaction.client_id() {
+                error!("Requesting ClientId does not match disputed transaction's ClientId");
+                return false;
+            }
+            if existing_transaction.amount().is_none() {
+                error!("Transaction did not have an Amount specified");
+                return false;
+            }
+        },
     }
+    true
 }
 
-fn deposit(accounts: &mut Accounts, transactions: &mut Transactions, mut account: Account, transaction: Transaction) {
-    debug!("Processing deposit transaction");
+fn deposit(account: &mut Account, amount: &Amount) -> bool {
+    debug!("Applying deposit transaction");
 
-    if transaction.amount().is_none() {
-        error!("Transaction did not have an Amount specified");
-        return;
-    }
+    *account.available_funds_mut() += amount;
 
-    if transactions.get(&transaction.id()).is_some() {
-        error!("Transaction {} has already been processed", transaction.id());
-        return;
-    }
-
-    *account.available_funds_mut() += transaction.amount().unwrap();
-
-    accounts.insert(account.client_id(), account);
-    transactions.insert(transaction.id(), transaction);
-
-    debug!("Deposit successful");
+    true
 }
 
-fn withdraw(accounts: &mut Accounts, transactions: &mut Transactions, mut account: Account, transaction: Transaction) {
-    debug!("Processing withdraw transaction");
+fn withdraw(account: &mut Account, amount: &Amount) -> bool {
+    debug!("Applying withdraw transaction");
 
-    if transaction.amount().is_none() {
-        error!("Transaction did not have an Amount specified");
-        return;
-    }
-
-    if transactions.get(&transaction.id()).is_some() {
-        error!("Transaction {} has already been processed", transaction.id());
-        return;
-    }
-
-    let tentative_amount = account.available_funds() - transaction.amount().unwrap();
+    let tentative_amount = account.available_funds() - amount;
 
     if tentative_amount < Amount::ZERO {
         error!("Client does not have sufficient funds to withdraw");
-        return;
+        return false;
     }
 
     *account.available_funds_mut() = tentative_amount;
 
-    accounts.insert(account.client_id(), account);
-    transactions.insert(transaction.id(), transaction);
-
-    debug!("Withdrawal successful");
+    true
 }
 
-fn dispute(accounts: &mut Accounts, transactions: &mut Transactions, mut account: Account, transaction: Transaction) {
-    debug!("Processing dispute transaction");
+fn dispute(
+    account: &mut Account, transaction: &mut Transaction, disputed_transaction_type: TransactionType,
+    disputed_amount: &Amount,
+) -> bool {
+    debug!("Applying dispute transaction");
 
-    let Some(mut disputed_transaction) = transactions.get(&transaction.id()).cloned() else {
-        error!("The disputed transaction does not exist");
-        return;
-    };
-
-    if disputed_transaction.transaction_type() != &TransactionType::Deposit
-        && disputed_transaction.transaction_type() != &TransactionType::Resolve
-    {
+    if disputed_transaction_type != Deposit && disputed_transaction_type != Resolve {
         error!("Can only dispute deposit transactions or previously resolved ones");
-        return;
+        return false;
     }
-
-    if disputed_transaction.client_id() != transaction.client_id() {
-        error!("Requesting ClientId does not match disputed transaction's ClientId");
-        return;
-    }
-
-    if disputed_transaction.amount().is_none() {
-        error!("Disupted transaction did not have an Amount");
-        return;
-    }
-
-    let disputed_amount = disputed_transaction.amount().unwrap();
 
     *account.available_funds_mut() -= disputed_amount;
     *account.held_funds_mut() += disputed_amount;
 
-    accounts.insert(account.client_id(), account);
+    *transaction.transaction_type_mut() = Dispute;
+    *transaction.amount_mut() = Some(disputed_amount.clone());
 
-    *disputed_transaction.transaction_type_mut() = TransactionType::Dispute;
-    transactions.insert(disputed_transaction.id(), disputed_transaction);
-
-    debug!("Dispute successful");
+    true
 }
 
-fn resolve(accounts: &mut Accounts, transactions: &mut Transactions, mut account: Account, transaction: Transaction) {
-    debug!("Processing resolve transaction");
+fn resolve(
+    account: &mut Account, transaction: &mut Transaction, disputed_transaction_type: TransactionType,
+    disputed_amount: &Amount,
+) -> bool {
+    debug!("Applying resolve transaction");
 
-    let Some(mut disputed_transaction) = transactions.get(&transaction.id()).cloned() else {
-        error!("The disputed transaction does not exist");
-        return;
-    };
-
-    if disputed_transaction.transaction_type() != &TransactionType::Dispute {
+    if disputed_transaction_type != Dispute {
         error!("Can only resolve disputed transactions");
-        return;
+        return false;
     }
-
-    if disputed_transaction.client_id() != transaction.client_id() {
-        error!("Requesting ClientId does not match disputed transaction's ClientId");
-        return;
-    }
-
-    if disputed_transaction.amount().is_none() {
-        error!("Disupted transaction did not have an Amount");
-        return;
-    }
-
-    let disputed_amount = disputed_transaction.amount().unwrap();
 
     *account.available_funds_mut() += disputed_amount;
     *account.held_funds_mut() -= disputed_amount;
 
-    accounts.insert(account.client_id(), account);
+    *transaction.transaction_type_mut() = Resolve;
+    *transaction.amount_mut() = Some(disputed_amount.clone());
 
-    *disputed_transaction.transaction_type_mut() = TransactionType::Resolve;
-    transactions.insert(disputed_transaction.id(), disputed_transaction);
-
-    debug!("Resolve successful");
+    true
 }
 
 fn chargeback(
-    accounts: &mut Accounts, transactions: &mut Transactions, mut account: Account, transaction: Transaction,
-) {
-    debug!("Processing chargeback transaction");
+    account: &mut Account, transaction: &mut Transaction, disputed_transaction_type: TransactionType,
+    disputed_amount: &Amount,
+) -> bool {
+    debug!("Applying chargeback transaction");
 
-    let Some(mut disputed_transaction) = transactions.get(&transaction.id()).cloned() else {
-        error!("The disputed transaction does not exist");
-        return;
-    };
-
-    if disputed_transaction.transaction_type() != &TransactionType::Dispute {
+    if disputed_transaction_type != Dispute {
         error!("Can only chargeback disputed transactions");
-        return;
+        return false;
     }
-
-    if disputed_transaction.client_id() != transaction.client_id() {
-        error!("Requesting ClientId does not match disputed transaction's ClientId");
-        return;
-    }
-
-    if disputed_transaction.amount().is_none() {
-        error!("Disupted transaction did not have an Amount");
-        return;
-    }
-
-    let disputed_amount = disputed_transaction.amount().unwrap();
 
     *account.held_funds_mut() -= disputed_amount;
     account.lock();
 
-    accounts.insert(account.client_id(), account);
+    *transaction.transaction_type_mut() = Chargeback;
+    *transaction.amount_mut() = Some(disputed_amount.clone());
 
-    *disputed_transaction.transaction_type_mut() = TransactionType::Chargeback;
-    transactions.insert(disputed_transaction.id(), disputed_transaction);
-
-    debug!("Chargeback successful");
+    true
 }
 
 fn output_accounts_summary(accounts: &Accounts) {

@@ -28,8 +28,8 @@ impl Transaction {
     pub fn id(&self) -> TransactionId {
         self.id
     }
-    pub fn transaction_type(&self) -> &TransactionType {
-        &self.transaction_type
+    pub fn transaction_type(&self) -> TransactionType {
+        self.transaction_type
     }
     pub fn transaction_type_mut(&mut self) -> &mut TransactionType {
         &mut self.transaction_type
@@ -40,9 +40,12 @@ impl Transaction {
     pub fn amount(&self) -> Option<&Amount> {
         self.amount.as_ref()
     }
+    pub fn amount_mut(&mut self) -> &mut Option<Amount> {
+        &mut self.amount
+    }
 }
 
-#[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionType {
     Deposit,
