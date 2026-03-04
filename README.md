@@ -27,7 +27,7 @@ A `RESOLVE` or `CHARGEBACK` transaction cannot occur before a `DISPUTE` transact
 matching "disputed" transaction, otherwise the `RESOLVE` or `CHARAGEBACK` transaction will be ignored.
 
 ## Assumption 3
-A `DISPUTE` transaction must have a "disputed" transaction of type `DEPOSIT`. I believe this is implicitly implied in the
+A `DISPUTE` transaction must have an initual "disputed" transaction of type `DEPOSIT`. I believe this is implicitly implied in the
 specifications ("... available funds should *decrease* by the amount disputed...").
 
 There could be an argument to allow disputing withdrawals for cases where the account is compromised and the account
@@ -91,3 +91,11 @@ client,available,held,total,locked
 This behavior could be argued either way (to record or not to record). I chose not to record because it could protect
 the database against malicious actors who intentionally send bogus transactions. Plus, a client being absent from the
 database implies that its record would be `<client_id>,0,0,0,false`.
+
+## Assumption 9
+
+If a transaction was disputed and then resolved, it can be disputed again in the future. Subsequent disputes can happen
+in real life, particularly in situations where new information is discovered that could help support the dispute.
+
+The payment system might want to cap the number of times a transaction can be disputed, but this implementation does not
+enforce such limits.

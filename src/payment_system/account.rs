@@ -46,4 +46,8 @@ impl Account {
     pub fn locked(&self) -> bool {
         self.locked
     }
+
+    pub fn lock(&mut self) {
+        self.locked = true;
+    }
 }

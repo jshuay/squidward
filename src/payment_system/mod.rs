@@ -81,7 +81,7 @@ where
         &TransactionType::Withdrawal => withdraw(account_database, transaction_database, account, transaction)?,
         &TransactionType::Dispute => dispute(account_database, transaction_database, account, transaction)?,
         &TransactionType::Resolve => resolve(account_database, transaction_database, account, transaction)?,
-        &TransactionType::Chargeback => todo!(),
+        &TransactionType::Chargeback => chargeback(account_database, transaction_database, account, transaction)?,
     }
 
     Ok(())
@@ -166,8 +166,10 @@ where
         return Ok(());
     };
 
-    if disputed_transaction.transaction_type() != &TransactionType::Deposit {
-        error!("Can only dispute deposit transactions");
+    if disputed_transaction.transaction_type() != &TransactionType::Deposit
+        && disputed_transaction.transaction_type() != &TransactionType::Resolve
+    {
+        error!("Can only dispute deposit transactions or previously resolved ones");
         return Ok(());
     }
 
@@ -226,6 +228,45 @@ where
     transaction_database.insert(disputed_transaction.id().clone(), disputed_transaction)?;
 
     debug!("Resolve successful");
+
+    Ok(())
+}
+
+fn chargeback<A, T>(
+    account_database: &mut A, transaction_database: &mut T, mut account: Account, transaction: Transaction,
+) -> Result<()>
+where
+    A: Database<Key = ClientId, Record = Account>,
+    T: Database<Key = TransactionId, Record = Transaction>,
+{
+    debug!("Processing chargeback transaction");
+
+    let Some(mut disputed_transaction) = transaction_database.retrieve(transaction.id())? else {
+        error!("The disputed transaction does not exist");
+        return Ok(());
+    };
+
+    if disputed_transaction.transaction_type() != &TransactionType::Dispute {
+        error!("Can only chargeback disputed transactions");
+        return Ok(());
+    }
+
+    if disputed_transaction.amount().is_none() {
+        error!("Disupted transaction did not have an Amount");
+        return Ok(());
+    }
+
+    let disputed_amount = disputed_transaction.amount().unwrap();
+
+    *account.held_funds_mut() -= disputed_amount;
+    account.lock();
+
+    account_database.insert(account.client_id().clone(), account)?;
+
+    *disputed_transaction.transaction_type_mut() = TransactionType::Chargeback;
+    transaction_database.insert(disputed_transaction.id().clone(), disputed_transaction)?;
+
+    debug!("Chargeback successful");
 
     Ok(())
 }
