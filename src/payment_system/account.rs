@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fmt::Display;
+use std::fmt;
 
 use crate::payment_system::types::Amount;
 use crate::payment_system::types::ClientId;
@@ -16,8 +16,8 @@ pub struct Account {
     locked: bool,
 }
 
-impl Display for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{},{},{},{},{}",

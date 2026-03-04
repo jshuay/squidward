@@ -1,6 +1,5 @@
 mod account;
 mod transaction;
-mod types;
 
 use std::fs::File;
 
@@ -14,6 +13,16 @@ use crate::payment_system::transaction::Transaction;
 use crate::payment_system::transaction::TransactionType;
 use crate::payment_system::transaction::Transactions;
 use crate::payment_system::types::Amount;
+
+mod types {
+    use rust_decimal::Decimal;
+
+    pub type ClientId = u16;
+
+    pub type TransactionId = u32;
+
+    pub type Amount = Decimal;
+}
 
 pub fn simulate(mut transactions_csv: Reader<File>) {
     debug!("Running payment system simulator");
