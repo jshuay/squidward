@@ -99,3 +99,7 @@ in real life, particularly in situations where new information is discovered tha
 
 The payment system might want to cap the number of times a transaction can be disputed, but this implementation does not
 enforce such limits.
+
+## Assumption 10
+
+A `DISPUTE`, `RESOLVE`, or `CHARGEBACK` transaction must have a matching ClientId as the initially disputed transaction.

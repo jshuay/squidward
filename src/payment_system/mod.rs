@@ -178,6 +178,11 @@ where
         return Ok(());
     }
 
+    if disputed_transaction.client_id() != transaction.client_id() {
+        error!("Requesting ClientId does not match disputed transaction's ClientId");
+        return Ok(());
+    }
+
     if disputed_transaction.amount().is_none() {
         error!("Disupted transaction did not have an Amount");
         return Ok(());
@@ -217,6 +222,11 @@ where
         return Ok(());
     }
 
+    if disputed_transaction.client_id() != transaction.client_id() {
+        error!("Requesting ClientId does not match disputed transaction's ClientId");
+        return Ok(());
+    }
+
     if disputed_transaction.amount().is_none() {
         error!("Disupted transaction did not have an Amount");
         return Ok(());
@@ -253,6 +263,11 @@ where
 
     if disputed_transaction.transaction_type() != &TransactionType::Dispute {
         error!("Can only chargeback disputed transactions");
+        return Ok(());
+    }
+
+    if disputed_transaction.client_id() != transaction.client_id() {
+        error!("Requesting ClientId does not match disputed transaction's ClientId");
         return Ok(());
     }
 
