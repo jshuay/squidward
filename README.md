@@ -103,3 +103,19 @@ enforce such limits.
 ## Assumption 10
 
 A `DISPUTE`, `RESOLVE`, or `CHARGEBACK` transaction must have a matching ClientId as the initially disputed transaction.
+
+## Assumption 11
+
+Regarding how numbers are rounded: from my research, it seems like payment systems commonly use a rounding strategy
+called "Banker's Rounding", which is different from the strategy typically taught at school. Apparently there are nice
+statistical properties with using the former strategy, so I am inclined to use it for this implementation. Example:
+
+```
+5.4 -> 5
+5.5 -> 6
+5.6 -> 6
+
+6.4 -> 6
+6.5 -> 6 (not 7!)
+6.6 -> 7
+```
