@@ -5,9 +5,7 @@ mod types {
     use rust_decimal::Decimal;
 
     pub type ClientId = u16;
-
     pub type TransactionId = u32;
-
     pub type Amount = Decimal;
 }
 
@@ -179,7 +177,6 @@ fn dispute(
     *account.available_funds_mut() -= disputed_amount;
     *account.held_funds_mut() += disputed_amount;
 
-    *transaction.transaction_type_mut() = Dispute;
     *transaction.amount_mut() = Some(disputed_amount.clone());
 
     true
@@ -199,7 +196,6 @@ fn resolve(
     *account.available_funds_mut() += disputed_amount;
     *account.held_funds_mut() -= disputed_amount;
 
-    *transaction.transaction_type_mut() = Resolve;
     *transaction.amount_mut() = Some(disputed_amount.clone());
 
     true
@@ -219,7 +215,6 @@ fn chargeback(
     *account.held_funds_mut() -= disputed_amount;
     account.lock();
 
-    *transaction.transaction_type_mut() = Chargeback;
     *transaction.amount_mut() = Some(disputed_amount.clone());
 
     true
@@ -229,5 +224,488 @@ fn output_accounts_summary(accounts: &Accounts) {
     println!("{ACCOUNT_HEADERS}");
     for account in accounts.values() {
         println!("{account}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rust_decimal::dec;
+
+    use crate::payment_system::account::Account;
+    use crate::payment_system::apply_transaction;
+    use crate::payment_system::chargeback;
+    use crate::payment_system::deposit;
+    use crate::payment_system::dispute;
+    use crate::payment_system::is_valid_transaction;
+    use crate::payment_system::resolve;
+    use crate::payment_system::transaction::Transaction;
+    use crate::payment_system::transaction::TransactionType;
+    use crate::payment_system::types::Amount;
+    use crate::payment_system::withdraw;
+
+    #[test]
+    fn apply_transaction_on_locked_accounts_does_not_apply() {
+        let client_id = 0;
+        let mut account = Account::new(client_id);
+        account.lock();
+
+        let mut transaction = Transaction::new(0, TransactionType::Deposit, client_id, Some(dec!(1.0)));
+
+        assert_eq!(&Amount::ZERO, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(Amount::ZERO, account.total_funds());
+        assert!(account.locked());
+
+        assert!(!apply_transaction(&mut account, &mut transaction, None));
+
+        assert_eq!(&Amount::ZERO, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(Amount::ZERO, account.total_funds());
+        assert!(account.locked());
+    }
+
+    #[test]
+    fn is_valid_transaction_for_valid_transactions_returns_true() {
+        let client_id = 0;
+        let deposit_transaction_id = 0;
+
+        let deposit_transaction = Transaction::new(
+            deposit_transaction_id,
+            TransactionType::Deposit,
+            client_id,
+            Some(dec!(1.0)),
+        );
+        let withdrawal_transaction = Transaction::new(1, TransactionType::Withdrawal, client_id, Some(dec!(1.0)));
+        let dispute_transaction = Transaction::new(deposit_transaction_id, TransactionType::Dispute, client_id, None);
+        let resolve_transaction = Transaction::new(deposit_transaction_id, TransactionType::Resolve, client_id, None);
+        let chargeback_transaction =
+            Transaction::new(deposit_transaction_id, TransactionType::Chargeback, client_id, None);
+
+        assert!(is_valid_transaction(&deposit_transaction, &None));
+        assert!(is_valid_transaction(&withdrawal_transaction, &None));
+        assert!(is_valid_transaction(&dispute_transaction, &Some(&deposit_transaction)));
+        assert!(is_valid_transaction(&resolve_transaction, &Some(&deposit_transaction)));
+        assert!(is_valid_transaction(
+            &chargeback_transaction,
+            &Some(&deposit_transaction)
+        ));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_deposit_and_withdrawal_with_existing_transaction_returns_false() {
+        let deposit_transaction = Transaction::new(0, TransactionType::Deposit, 0, Some(dec!(1.0)));
+        let withdrawal_transaction = Transaction::new(0, TransactionType::Withdrawal, 0, Some(dec!(1.0)));
+
+        assert!(!is_valid_transaction(&deposit_transaction, &Some(&deposit_transaction)));
+        assert!(!is_valid_transaction(
+            &withdrawal_transaction,
+            &Some(&withdrawal_transaction)
+        ));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_deposit_and_withdrawal_with_no_amount_returns_false() {
+        let deposit_transaction = Transaction::new(0, TransactionType::Deposit, 0, None);
+        let withdrawal_transaction = Transaction::new(0, TransactionType::Withdrawal, 0, None);
+
+        assert!(!is_valid_transaction(&deposit_transaction, &None));
+        assert!(!is_valid_transaction(&withdrawal_transaction, &None));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_dispute_resolve_and_chargeback_with_no_existing_transaction_returns_false() {
+        let dispute_transaction = Transaction::new(0, TransactionType::Dispute, 0, None);
+        let resolve_transaction = Transaction::new(0, TransactionType::Resolve, 0, None);
+        let chargeback_transaction = Transaction::new(0, TransactionType::Chargeback, 0, None);
+
+        assert!(!is_valid_transaction(&dispute_transaction, &None));
+        assert!(!is_valid_transaction(&resolve_transaction, &None));
+        assert!(!is_valid_transaction(&chargeback_transaction, &None));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_dispute_resolve_and_chargeback_with_mismatching_client_id_returns_false() {
+        let transaction_id = 0;
+        let client_id = 0;
+        let mismatch_client_id = 1;
+
+        let existing_transaction =
+            Transaction::new(transaction_id, TransactionType::Deposit, client_id, Some(dec!(1.0)));
+
+        let dispute_transaction = Transaction::new(transaction_id, TransactionType::Dispute, mismatch_client_id, None);
+        let resolve_transaction = Transaction::new(transaction_id, TransactionType::Resolve, mismatch_client_id, None);
+        let chargeback_transaction =
+            Transaction::new(transaction_id, TransactionType::Chargeback, mismatch_client_id, None);
+
+        assert!(!is_valid_transaction(
+            &dispute_transaction,
+            &Some(&existing_transaction)
+        ));
+        assert!(!is_valid_transaction(
+            &resolve_transaction,
+            &Some(&existing_transaction)
+        ));
+        assert!(!is_valid_transaction(
+            &chargeback_transaction,
+            &Some(&existing_transaction)
+        ));
+    }
+
+    #[test]
+    fn is_valid_transaction_for_dispute_resolve_and_chargeback_with_no_amount_on_existing_transaction_returns_false() {
+        let transaction_id = 0;
+        let client_id = 0;
+
+        let existing_transaction = Transaction::new(transaction_id, TransactionType::Deposit, client_id, None);
+
+        let dispute_transaction = Transaction::new(transaction_id, TransactionType::Dispute, client_id, None);
+        let resolve_transaction = Transaction::new(transaction_id, TransactionType::Resolve, client_id, None);
+        let chargeback_transaction = Transaction::new(transaction_id, TransactionType::Chargeback, client_id, None);
+
+        assert!(!is_valid_transaction(
+            &dispute_transaction,
+            &Some(&existing_transaction)
+        ));
+        assert!(!is_valid_transaction(&resolve_transaction, &Some(&dispute_transaction)));
+        assert!(!is_valid_transaction(
+            &chargeback_transaction,
+            &Some(&dispute_transaction)
+        ));
+    }
+
+    #[test]
+    fn deposit_only_increases_accounts_available_funds() {
+        let mut account = Account::new(0);
+        let deposit_amount = dec!(5.123);
+
+        assert_eq!(&Amount::ZERO, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(Amount::ZERO, account.total_funds());
+
+        assert!(deposit(&mut account, &deposit_amount));
+
+        assert_eq!(&deposit_amount, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(deposit_amount, account.total_funds());
+    }
+
+    #[test]
+    fn withdraw_only_decreases_accounts_available_funds() {
+        let starting_amount = dec!(10);
+
+        let mut account = Account::new(0);
+        *account.available_funds_mut() = starting_amount;
+        let withdrawal_amount = dec!(5.123);
+
+        assert_eq!(&starting_amount, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(starting_amount, account.total_funds());
+
+        assert!(withdraw(&mut account, &withdrawal_amount));
+
+        let expected_leftover_amount = starting_amount - withdrawal_amount;
+
+        assert_eq!(&expected_leftover_amount, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(expected_leftover_amount, account.total_funds());
+    }
+
+    #[test]
+    fn withdraw_when_amount_exceeds_accounts_available_funds_fails_to_apply() {
+        let mut account = Account::new(0);
+        let withdrawal_amount = dec!(10);
+
+        assert_eq!(&Amount::ZERO, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(Amount::ZERO, account.total_funds());
+
+        assert!(!withdraw(&mut account, &withdrawal_amount));
+
+        assert_eq!(&Amount::ZERO, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(Amount::ZERO, account.total_funds());
+    }
+
+    #[test]
+    fn dispute_on_non_deposit_or_resolve_transaction_fails_to_apply() {
+        let client_id = 0;
+        let disputed_transaction_id = 0;
+
+        let mut account = Account::new(client_id);
+
+        let mut dispute_transaction =
+            Transaction::new(disputed_transaction_id, TransactionType::Dispute, client_id, None);
+
+        assert!(!dispute(
+            &mut account,
+            &mut dispute_transaction,
+            TransactionType::Withdrawal,
+            &dec!(1.0)
+        ));
+        assert!(!dispute(
+            &mut account,
+            &mut dispute_transaction,
+            TransactionType::Dispute,
+            &dec!(1.0)
+        ));
+        assert!(!dispute(
+            &mut account,
+            &mut dispute_transaction,
+            TransactionType::Chargeback,
+            &dec!(1.0)
+        ));
+    }
+
+    #[test]
+    fn dispute_with_valid_disputed_transaction_transfers_funds_from_available_to_held() {
+        let client_id = 0;
+        let starting_available_funds = dec!(10);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+
+        let mut dispute_transaction = Transaction::new(0, TransactionType::Dispute, client_id, None);
+
+        assert_eq!(&starting_available_funds, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(starting_available_funds, account.total_funds());
+
+        assert!(dispute(
+            &mut account,
+            &mut dispute_transaction,
+            TransactionType::Resolve,
+            &disputed_amount
+        ));
+
+        assert_eq!(&(starting_available_funds - disputed_amount), account.available_funds());
+        assert_eq!(&disputed_amount, account.held_funds());
+        assert_eq!(starting_available_funds, account.total_funds());
+    }
+
+    #[test]
+    fn dispute_with_valid_disputed_transaction_updates_transaction_with_disputed_amount() {
+        let client_id = 0;
+        let starting_available_funds = dec!(10);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+
+        let mut dispute_transaction = Transaction::new(0, TransactionType::Dispute, client_id, None);
+
+        assert!(dispute_transaction.amount().is_none());
+
+        assert!(dispute(
+            &mut account,
+            &mut dispute_transaction,
+            TransactionType::Deposit,
+            &disputed_amount
+        ));
+
+        assert!(dispute_transaction.amount().is_some());
+        assert_eq!(&disputed_amount, dispute_transaction.amount().unwrap());
+    }
+
+    #[test]
+    fn resolve_on_non_dispute_transaction_fails_to_apply() {
+        let client_id = 0;
+        let disputed_transaction_id = 0;
+
+        let mut account = Account::new(client_id);
+
+        let mut resolve_transaction =
+            Transaction::new(disputed_transaction_id, TransactionType::Resolve, client_id, None);
+
+        assert!(!resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Deposit,
+            &dec!(1.0)
+        ));
+        assert!(!resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Withdrawal,
+            &dec!(1.0)
+        ));
+        assert!(!resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Resolve,
+            &dec!(1.0)
+        ));
+        assert!(!resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Chargeback,
+            &dec!(1.0)
+        ));
+    }
+
+    #[test]
+    fn resolve_with_valid_disputed_transaction_transfers_funds_from_held_to_available() {
+        let client_id = 0;
+        let starting_available_funds = dec!(6);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+        *account.held_funds_mut() = disputed_amount;
+
+        let mut resolve_transaction = Transaction::new(0, TransactionType::Resolve, client_id, None);
+
+        assert_eq!(&starting_available_funds, account.available_funds());
+        assert_eq!(&disputed_amount, account.held_funds());
+        assert_eq!(starting_available_funds + disputed_amount, account.total_funds());
+
+        assert!(resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Dispute,
+            &disputed_amount
+        ));
+
+        assert_eq!(&(starting_available_funds + disputed_amount), account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(starting_available_funds + disputed_amount, account.total_funds());
+    }
+
+    #[test]
+    fn resolve_with_valid_disputed_transaction_updates_transaction_with_disputed_amount() {
+        let client_id = 0;
+        let starting_available_funds = dec!(6);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+        *account.held_funds_mut() = disputed_amount;
+
+        let mut resolve_transaction = Transaction::new(0, TransactionType::Resolve, client_id, None);
+
+        assert!(resolve_transaction.amount().is_none());
+
+        assert!(resolve(
+            &mut account,
+            &mut resolve_transaction,
+            TransactionType::Dispute,
+            &disputed_amount
+        ));
+
+        assert!(resolve_transaction.amount().is_some());
+        assert_eq!(&disputed_amount, resolve_transaction.amount().unwrap());
+    }
+
+    #[test]
+    fn chargeback_on_non_dispute_transaction_fails_to_apply() {
+        let client_id = 0;
+        let disputed_transaction_id = 0;
+
+        let mut account = Account::new(client_id);
+
+        let mut chargeback_transaction =
+            Transaction::new(disputed_transaction_id, TransactionType::Chargeback, client_id, None);
+
+        assert!(!chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Deposit,
+            &dec!(1.0)
+        ));
+        assert!(!chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Withdrawal,
+            &dec!(1.0)
+        ));
+        assert!(!chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Resolve,
+            &dec!(1.0)
+        ));
+        assert!(!chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Chargeback,
+            &dec!(1.0)
+        ));
+    }
+
+    #[test]
+    fn chargeback_with_valid_disputed_transaction_reduces_total_funds_by_disputed_amount() {
+        let client_id = 0;
+        let starting_available_funds = dec!(6);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+        *account.held_funds_mut() = disputed_amount;
+
+        let mut chargeback_transaction = Transaction::new(0, TransactionType::Chargeback, client_id, None);
+
+        assert_eq!(&starting_available_funds, account.available_funds());
+        assert_eq!(&disputed_amount, account.held_funds());
+        assert_eq!(starting_available_funds + disputed_amount, account.total_funds());
+
+        assert!(chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Dispute,
+            &disputed_amount
+        ));
+
+        assert_eq!(&starting_available_funds, account.available_funds());
+        assert_eq!(&Amount::ZERO, account.held_funds());
+        assert_eq!(starting_available_funds, account.total_funds());
+    }
+
+    #[test]
+    fn chargeback_with_valid_disputed_transaction_updates_transaction_with_disputed_amount() {
+        let client_id = 0;
+        let starting_available_funds = dec!(6);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+        *account.held_funds_mut() = disputed_amount;
+
+        let mut chargeback_transaction = Transaction::new(0, TransactionType::Chargeback, client_id, None);
+
+        assert!(chargeback_transaction.amount().is_none());
+
+        assert!(chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Dispute,
+            &disputed_amount
+        ));
+
+        assert!(chargeback_transaction.amount().is_some());
+        assert_eq!(&disputed_amount, chargeback_transaction.amount().unwrap());
+    }
+
+    #[test]
+    fn chargeback_with_valid_disputed_transaction_applied_locks_account() {
+        let client_id = 0;
+        let starting_available_funds = dec!(6);
+        let disputed_amount = dec!(4);
+
+        let mut account = Account::new(client_id);
+        *account.available_funds_mut() = starting_available_funds;
+        *account.held_funds_mut() = disputed_amount;
+
+        let mut chargeback_transaction = Transaction::new(0, TransactionType::Chargeback, client_id, None);
+
+        assert!(!account.locked());
+
+        assert!(chargeback(
+            &mut account,
+            &mut chargeback_transaction,
+            TransactionType::Dispute,
+            &disputed_amount
+        ));
+
+        assert!(account.locked());
     }
 }

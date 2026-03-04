@@ -31,9 +31,6 @@ impl Transaction {
     pub fn transaction_type(&self) -> TransactionType {
         self.transaction_type
     }
-    pub fn transaction_type_mut(&mut self) -> &mut TransactionType {
-        &mut self.transaction_type
-    }
     pub fn client_id(&self) -> ClientId {
         self.client_id
     }
@@ -42,6 +39,20 @@ impl Transaction {
     }
     pub fn amount_mut(&mut self) -> &mut Option<Amount> {
         &mut self.amount
+    }
+}
+
+#[cfg(test)]
+impl Transaction {
+    pub fn new(
+        id: TransactionId, transaction_type: TransactionType, client_id: ClientId, amount: Option<Amount>,
+    ) -> Self {
+        Transaction {
+            id,
+            transaction_type,
+            client_id,
+            amount,
+        }
     }
 }
 

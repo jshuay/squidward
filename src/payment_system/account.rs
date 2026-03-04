@@ -108,7 +108,7 @@ mod tests {
             held: dec!(7),
             locked: false,
         };
-        assert_eq!(account.total_funds(), dec!(-3));
+        assert_eq!(dec!(-3), account.total_funds());
     }
 
     #[test]
